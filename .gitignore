@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.streamlit/
+*.py[cod]
+logs/*
+!logs/.gitkeep
+data/documents/*
+!data/documents/.gitkeep
+data/evaluation/results/*
+!data/evaluation/results/.gitkeep
