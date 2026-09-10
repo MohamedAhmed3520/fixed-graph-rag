@@ -16,8 +16,7 @@ docx2txt
 pypdf
 pymupdf
 
-rapidocr
-onnxruntime
+pytesseract
 Pillow
 
 pytest
