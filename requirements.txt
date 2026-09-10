@@ -16,9 +16,8 @@ docx2txt
 pypdf
 pymupdf
 
-rapidocr-onnxruntime
+rapidocr
 onnxruntime
-numpy
 Pillow
 
 pytest
