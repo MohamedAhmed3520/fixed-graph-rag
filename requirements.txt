@@ -1,24 +1,24 @@
-streamlit>=1.38,<2
-langchain>=1.0,<2
-langchain-community>=0.4,<1
-langchain-text-splitters>=1.0,<2
-langchain-openai>=1.0,<2
-langgraph>=1.0,<2
+streamlit
+langchain
+langchain-community
+langchain-text-splitters
+langchain-openai
+langgraph
 
-neo4j>=5.25,<7
-numpy>=2,<3
-pydantic>=2.8,<3
-pydantic-settings>=2.5,<3
-python-dotenv>=1.0,<2
-certifi>=2024.8.30
+neo4j
+numpy
+pydantic
+pydantic-settings
+python-dotenv
+certifi
 
-docx2txt>=0.8,<1
-pypdf>=6,<7
-pymupdf>=1.24,<2
+docx2txt
+pypdf
+pymupdf
 
-rapidocr-onnxruntime>=1.4,<2
-onnxruntime>=1.18,<2
-numpy>=1.26,<3
-Pillow>=10,<12
+rapidocr-onnxruntime
+onnxruntime
+numpy
+Pillow
 
-pytest>=8,<9
+pytest
