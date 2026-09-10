@@ -12,5 +12,6 @@ certifi>=2024.8.30
 docx2txt>=0.8,<1
 pypdf>=6,<7
 pymupdf>=1.24,<2
+numpy>=2,<3
 rapidocr-onnxruntime>=1.4,<2
 pytest>=8,<9

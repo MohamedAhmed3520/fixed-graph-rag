@@ -63,7 +63,10 @@ def load_document(file_path: str | Path) -> list[Document]:
         try:
             documents = _ocr_pdf(path)
         except ImportError as exc:
-            raise ValueError("No text could be extracted from the PDF. Install project requirements to enable OCR for scanned PDFs.") from exc
+            raise ValueError(
+                "OCR dependencies are unavailable. Install rapidocr-onnxruntime and its "
+                f"dependencies to process scanned PDFs: {exc}"
+            ) from exc
         text = "\n\n".join(document.page_content for document in documents).strip()
     if not text:
         raise ValueError(f"No text could be extracted from: {path.name}")
