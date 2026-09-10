@@ -17,39 +17,76 @@ SUPPORTED_TYPES = {
 }
 
 
+def _combine_text(documents: list[Document]) -> str:
+    """Combine document contents into one string."""
+
+    return "\n\n".join(
+        document.page_content
+        for document in documents
+        if document.page_content
+        and document.page_content.strip()
+    ).strip()
+
+
+def _has_text(documents: list[Document]) -> bool:
+    """Return True if at least one document contains text."""
+
+    return bool(_combine_text(documents))
+
+
 def _ocr_pdf(file_path: Path) -> list[Document]:
     """
-    Extract text from a scanned/image-only PDF using RapidOCR.
+    OCR a scanned/image-only PDF using RapidOCR.
 
-    Each PDF page is rendered to an image using PyMuPDF and then
+    Each PDF page is rendered to an image with PyMuPDF and
     processed independently by RapidOCR.
 
     Returns:
-        list[Document]: One LangChain Document per page containing
-        OCR-extracted text.
+        A list containing one LangChain Document per page
+        where OCR text was successfully extracted.
     """
 
-    import fitz
-    import numpy as np
-    from rapidocr import RapidOCR
+    # Import these here so normal TXT/MD/DOCX files don't require
+    # OCR initialization.
+    try:
+        import fitz
+        import numpy as np
+        from rapidocr import RapidOCR
+    except ImportError as exc:
+        raise RuntimeError(
+            "OCR dependencies are not installed. "
+            "Make sure requirements.txt contains: "
+            "rapidocr, onnxruntime, pymupdf, numpy, Pillow"
+        ) from exc
 
     documents: list[Document] = []
 
-    # Initialize OCR engine once instead of once per page.
-    ocr = RapidOCR()
+    try:
+        ocr = RapidOCR()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to initialize RapidOCR: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
 
-    with fitz.open(file_path) as pdf:
+    try:
+        pdf = fitz.open(str(file_path))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to open PDF '{file_path.name}': "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+    try:
         for page_number, page in enumerate(pdf):
             try:
-                # Render the page at 2x resolution.
-                # This generally gives OCR better input quality
-                # than rendering at the default resolution.
+                # Render page at 2x resolution for better OCR accuracy.
                 pixmap = page.get_pixmap(
                     matrix=fitz.Matrix(2, 2),
                     alpha=False,
                 )
 
-                # Convert PyMuPDF image buffer into a NumPy array.
+                # Convert PyMuPDF image to NumPy array.
                 image = np.frombuffer(
                     pixmap.samples,
                     dtype=np.uint8,
@@ -59,24 +96,23 @@ def _ocr_pdf(file_path: Path) -> list[Document]:
                     pixmap.n,
                 )
 
-                # Run OCR.
+                # Run RapidOCR.
                 result = ocr(image)
 
-                # Modern RapidOCR exposes recognized text through
-                # the `txts` attribute.
+                # Current RapidOCR exposes recognized text
+                # through the `txts` property.
                 texts = getattr(result, "txts", None)
 
-                if texts is None:
-                    texts = []
+                if not texts:
+                    continue
 
-                # Clean OCR output.
-                page_text_parts = []
+                page_text_parts: list[str] = []
 
-                for text in texts:
-                    if text is None:
+                for item in texts:
+                    if item is None:
                         continue
 
-                    text = str(text).strip()
+                    text = str(item).strip()
 
                     if text:
                         page_text_parts.append(text)
@@ -103,15 +139,15 @@ def _ocr_pdf(file_path: Path) -> list[Document]:
                     f"{type(exc).__name__}: {exc}"
                 ) from exc
 
+    finally:
+        pdf.close()
+
     return documents
 
 
 def get_loader(file_path: str | Path):
     """
-    Return the appropriate LangChain loader for a file.
-
-    PDFs are initially processed with PyPDFLoader. If no text is
-    extracted, load_document() will try PyMuPDF and finally OCR.
+    Return the appropriate LangChain document loader.
     """
 
     path = Path(file_path)
@@ -161,69 +197,46 @@ def get_loader(file_path: str | Path):
     )
 
 
-def _has_text(documents: list[Document]) -> bool:
-    """
-    Check whether loaded documents contain meaningful text.
-    """
-
-    return any(
-        document.page_content
-        and document.page_content.strip()
-        for document in documents
-    )
-
-
-def _combine_text(documents: list[Document]) -> str:
-    """
-    Combine document text into a single string for validation.
-    """
-
-    return "\n\n".join(
-        document.page_content
-        for document in documents
-        if document.page_content
-    ).strip()
-
-
 def load_document(file_path: str | Path) -> list[Document]:
     """
-    Load a document using a multi-stage extraction strategy.
+    Load a document and return LangChain Documents.
 
-    PDF extraction order:
+    PDF extraction strategy:
 
         1. PyPDFLoader
         2. PyMuPDFLoader
         3. RapidOCR
 
-    This allows normal text PDFs to use normal text extraction while
-    scanned/image-only PDFs automatically fall back to OCR.
+    This means normal PDFs use their existing text layer,
+    while scanned/image-only PDFs automatically use OCR.
 
     Returns:
-        list[Document]: Extracted LangChain documents with metadata.
+        list[Document]
 
     Raises:
-        ValueError: If no text can be extracted.
-        RuntimeError: If OCR fails.
+        ValueError:
+            If no text can be extracted.
+
+        RuntimeError:
+            If PDF OCR or another extraction step fails.
     """
 
     path = Path(file_path)
-
     suffix = path.suffix.lower()
 
     # ---------------------------------------------------------
-    # Stage 1: Standard LangChain loader
+    # 1. Standard loader
     # ---------------------------------------------------------
 
-    loader = get_loader(path)
+    documents: list[Document] = []
 
     try:
+        loader = get_loader(path)
         documents = loader.load()
+
     except Exception as exc:
-        # For PDFs, continue to PyMuPDF/OCR even if the first loader
-        # itself encounters an extraction problem.
-        if suffix == ".pdf":
-            documents = []
-        else:
+        # For PDFs, continue to the fallback extraction methods.
+        if suffix != ".pdf":
             raise RuntimeError(
                 f"Failed to load '{path.name}': "
                 f"{type(exc).__name__}: {exc}"
@@ -232,7 +245,7 @@ def load_document(file_path: str | Path) -> list[Document]:
     text = _combine_text(documents)
 
     # ---------------------------------------------------------
-    # Stage 2: PyMuPDF fallback for PDFs
+    # 2. PyMuPDF fallback
     # ---------------------------------------------------------
 
     if not text and suffix == ".pdf":
@@ -250,44 +263,33 @@ def load_document(file_path: str | Path) -> list[Document]:
                 text = _combine_text(documents)
 
         except Exception:
-            # Do not stop here. The PDF may be scanned and require OCR.
+            # If PyMuPDF doesn't extract anything, continue to OCR.
             documents = []
             text = ""
 
     # ---------------------------------------------------------
-    # Stage 3: OCR fallback for scanned PDFs
+    # 3. OCR fallback
     # ---------------------------------------------------------
 
     if not text and suffix == ".pdf":
-        try:
-            documents = _ocr_pdf(path)
-        except ImportError as exc:
-            raise ValueError(
-                "This PDF appears to be scanned/image-only and "
-                "requires OCR, but the OCR dependencies are not "
-                "installed. Install `rapidocr` and `onnxruntime`."
-            ) from exc
-        except Exception as exc:
-            raise RuntimeError(
-                f"Could not OCR scanned PDF '{path.name}'. "
-                f"OCR error: {type(exc).__name__}: {exc}"
-            ) from exc
+
+        documents = _ocr_pdf(path)
 
         text = _combine_text(documents)
 
     # ---------------------------------------------------------
-    # Final validation
+    # 4. Final validation
     # ---------------------------------------------------------
 
     if not text:
         raise ValueError(
             f"No text could be extracted from '{path.name}'. "
-            f"The PDF may contain unsupported image content, "
-            f"or the OCR engine could not recognize its text."
+            "The PDF appears to contain scanned/image-only "
+            "content, but OCR did not recognize any text."
         )
 
     # ---------------------------------------------------------
-    # Content hash / document ID
+    # 5. Create deterministic document ID
     # ---------------------------------------------------------
 
     content_hash = hashlib.sha256(
@@ -303,7 +305,7 @@ def load_document(file_path: str | Path) -> list[Document]:
     }
 
     # ---------------------------------------------------------
-    # Add common metadata to every page/document
+    # 6. Enrich every Document with common metadata
     # ---------------------------------------------------------
 
     enriched: list[Document] = []
