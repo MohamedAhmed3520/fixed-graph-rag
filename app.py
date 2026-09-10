@@ -10,7 +10,7 @@ from neo4j.schema import initialize_schema
 from workflows.graph_rag_workflow import build_workflow
 
 
-st.set_page_config(page_title="Local GraphRAG", page_icon="G", layout="wide")
+st.set_page_config(page_title="GraphRAG", page_icon="G", layout="wide")
 settings = get_settings()
 st.title(settings.app_name)
 st.caption("Local document ingestion, vector retrieval, and knowledge-graph grounded answers")
