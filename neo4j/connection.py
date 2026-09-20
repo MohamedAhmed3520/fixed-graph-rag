@@ -1,26 +1,42 @@
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator, TypeVar
 
 import certifi
-from neo4j._sync.driver import Driver, GraphDatabase
+from neo4j._sync.driver import GraphDatabase
 from neo4j._conf import TrustCustomCAs
 
 from config.settings import get_settings
 
 
+T = TypeVar("T")
+
+
 class Neo4jClient:
-    def __init__(self, uri: str, username: str, password: str, database: str = "neo4j"):
+    def __init__(
+        self,
+        uri: str,
+        username: str,
+        password: str,
+        database: str = "neo4j",
+    ):
         if uri.startswith("neo4j+s://"):
             uri = uri.replace("neo4j+s://", "neo4j://", 1)
+
             self.driver = GraphDatabase.driver(
                 uri,
                 auth=(username, password),
                 encrypted=True,
-                trusted_certificates=TrustCustomCAs(certifi.where()),
+                trusted_certificates=TrustCustomCAs(
+                    certifi.where()
+                ),
             )
         else:
-            self.driver = GraphDatabase.driver(uri, auth=(username, password))
+            self.driver = GraphDatabase.driver(
+                uri,
+                auth=(username, password),
+            )
+
         self.database = database
 
     def verify_connectivity(self) -> None:
@@ -28,12 +44,33 @@ class Neo4jClient:
 
     @contextmanager
     def session(self) -> Iterator[Any]:
-        with self.driver.session(database=self.database) as session:
+        with self.driver.session(
+            database=self.database
+        ) as session:
             yield session
 
-    def execute(self, query: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def execute(
+        self,
+        query: str,
+        parameters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute a read/write Cypher statement and return records as dicts."""
         with self.session() as session:
-            return [record.data() for record in session.run(query, parameters or {})]
+            return [
+                record.data()
+                for record in session.run(
+                    query,
+                    parameters or {},
+                )
+            ]
+
+    def execute_write_transaction(
+        self,
+        work: Callable[[Any], T],
+    ) -> T:
+        """Execute multiple Cypher statements atomically."""
+        with self.session() as session:
+            return session.execute_write(work)
 
     def close(self) -> None:
         self.driver.close()
@@ -42,6 +79,15 @@ class Neo4jClient:
 @lru_cache(maxsize=1)
 def get_neo4j_client() -> Neo4jClient:
     settings = get_settings()
+
     if not settings.neo4j_password:
-        raise RuntimeError("NEO4J_PASSWORD is required for Neo4j access")
-    return Neo4jClient(settings.neo4j_uri, settings.neo4j_username, settings.neo4j_password, settings.neo4j_database)
+        raise RuntimeError(
+            "NEO4J_PASSWORD is required for Neo4j access"
+        )
+
+    return Neo4jClient(
+        settings.neo4j_uri,
+        settings.neo4j_username,
+        settings.neo4j_password,
+        settings.neo4j_database,
+    )
