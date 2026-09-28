@@ -1,6 +1,6 @@
-# Local GraphRAG
+# GraphRAG
 
-A modular local GraphRAG application using Streamlit, Neo4j, OpenRouter GPT-4o-mini, embeddings, and LangGraph. The application keeps ingestion, retrieval, orchestration, and evaluation independently testable.
+A modular GraphRAG application using Streamlit, Neo4j, OpenRouter GPT-4o-mini, embeddings, and LangGraph. The application keeps ingestion, retrieval, orchestration, and evaluation independently testable.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ flowchart TD
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.13+
 - A local Neo4j 5.x instance running without Docker
 - An OpenRouter API key
 
