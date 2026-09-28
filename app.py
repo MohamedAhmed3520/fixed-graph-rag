@@ -21,7 +21,7 @@ settings = get_settings()
 st.title(settings.app_name)
 
 st.caption(
-    "Local document ingestion, vector retrieval, "
+    " document ingestion, vector retrieval, "
     "and knowledge-graph grounded answers"
 )
 
